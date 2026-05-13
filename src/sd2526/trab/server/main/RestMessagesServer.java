@@ -9,6 +9,8 @@ import sd2526.trab.api.java.Messages;
 import sd2526.trab.discovery.Discovery;
 import sd2526.trab.server.rest.RestMessagesResource;
 
+import javax.net.ssl.SSLContext;
+
 
 public class RestMessagesServer {
 
@@ -23,7 +25,7 @@ public class RestMessagesServer {
 
     public static final int PORT = 8081;
     public static final String SERVICE = "MessagesService";
-    private static final String SERVER_URI_FMT = "http://%s:%s/rest";
+    private static final String SERVER_URI_FMT = "https://%s:%s/rest";
 
     public static void main(String[] args) {
         try {
@@ -34,7 +36,7 @@ public class RestMessagesServer {
             config.register(RestMessagesResource.class);
 
             String serverURI = String.format(SERVER_URI_FMT, hostname, PORT);
-            JdkHttpServerFactory.createHttpServer(URI.create(serverURI), config);
+            JdkHttpServerFactory.createHttpServer(URI.create(serverURI), config, SSLContext.getDefault());
 
             // starts the discovery for the messages server
             Discovery.getInstance().start(Messages.SERVICE_NAME + "@" + DOMAIN, serverURI);

@@ -9,6 +9,8 @@ import sd2526.trab.api.java.Users;
 import sd2526.trab.discovery.Discovery;
 import sd2526.trab.server.rest.RestUsersResource;
 
+import javax.net.ssl.SSLContext;
+
 
 public class RestUsersServer {
 
@@ -23,7 +25,7 @@ public class RestUsersServer {
 
     public static final int PORT = 8080;
     public static final String SERVICE = "UsersService";
-    private static final String SERVER_URI_FMT = "http://%s:%s/rest";
+    private static final String SERVER_URI_FMT = "https://%s:%s/rest";
 
     public static void main(String[] args) {
         try {
@@ -34,7 +36,7 @@ public class RestUsersServer {
             config.register(RestUsersResource.class);
 
             String serverURI = String.format(SERVER_URI_FMT, hostname, PORT);
-            JdkHttpServerFactory.createHttpServer(URI.create(serverURI), config);
+            JdkHttpServerFactory.createHttpServer(URI.create(serverURI), config, SSLContext.getDefault());
 
             // starts the discovery for the users server
             Discovery.getInstance().start(Users.SERVICE_NAME + "@" + DOMAIN, serverURI);

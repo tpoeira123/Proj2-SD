@@ -1,6 +1,8 @@
 package sd2526.trab.clients.grpc;
 
+import java.io.FileInputStream;
 import java.net.URI;
+import java.security.KeyStore;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 
@@ -8,10 +10,13 @@ import io.grpc.Channel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.grpc.Status.Code;
-import jakarta.ws.rs.ProcessingException;
+import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 import sd2526.trab.api.java.Result;
-import sd2526.trab.api.java.Result.ErrorCode;;
+import sd2526.trab.api.java.Result.ErrorCode;
+
+import javax.net.ssl.TrustManagerFactory;
 
 public class GrpcClient {
 
@@ -21,8 +26,35 @@ public class GrpcClient {
     protected GrpcClient(URI serverURI) {
         this.serverURI = serverURI;
 
-        this.channel = ManagedChannelBuilder.forAddress(this.serverURI.getHost(), this.serverURI.getPort())
-                .usePlaintext().enableRetry().build();
+        this.channel = buildTlsChannel(serverURI);
+    }
+
+    private static Channel buildTlsChannel(URI serverURI) {
+        try {
+            String truststorePath = System.getProperty("javax.net.ssl.trustStore");
+            String truststorePassword = System.getProperty("javax.net.ssl.trustStorePassword");
+
+            KeyStore truststore = KeyStore.getInstance("JKS");
+            try (FileInputStream fis = new FileInputStream(truststorePath)) {
+                truststore.load(fis, truststorePassword.toCharArray());
+            }
+
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(truststore);
+
+            SslContext sslContext = GrpcSslContexts.forClient()
+                    .trustManager(tmf)
+                    .build();
+
+            return NettyChannelBuilder
+                    .forAddress(serverURI.getHost(), serverURI.getPort())
+                    .sslContext(sslContext)
+                    .enableRetry()
+                    .build();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to build TLS gRPC channel: " + e.getMessage(), e);
+        }
     }
 
     protected <T> Result<T> processResponse(Supplier<T> func) {

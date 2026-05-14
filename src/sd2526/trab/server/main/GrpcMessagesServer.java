@@ -1,22 +1,17 @@
 package sd2526.trab.server.main;
 
-import io.grpc.Grpc;
-import io.grpc.InsecureServerCredentials;
 import io.grpc.Server;
-import io.grpc.ServerCredentials;
+import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
+import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 import sd2526.trab.api.java.Messages;
-import sd2526.trab.api.java.Users;
 import sd2526.trab.discovery.Discovery;
 import sd2526.trab.server.grpc.GrpcMessagesController;
-import sd2526.trab.server.grpc.GrpcUsersController;
 
 import java.net.InetAddress;
 import java.util.logging.Logger;
 
 public class GrpcMessagesServer {
-
     private static Logger LOG = Logger.getLogger(GrpcMessagesServer.class.getName());
-
     public static String DOMAIN;
 
     static {
@@ -27,23 +22,30 @@ public class GrpcMessagesServer {
     public static final int PORT = 8084;
     private static final String SERVER_URI_FMT = "grpc://%s:%s/grpc";
 
-    public static void main(String[] args) {
-        try {
-            String hostname = InetAddress.getLocalHost().getHostName();
-            DOMAIN = hostname.substring(hostname.indexOf(".") + 1);
+    public static void main(String[] args) throws Exception {
+        // args[0] = keystore path, args[1] = keystore password
+        String keystorePath = args[0];
+        String keystorePassword = args[1];
 
-            GrpcMessagesController stub = new GrpcMessagesController(DOMAIN);
-            ServerCredentials cred = InsecureServerCredentials.create();
-            Server server = Grpc.newServerBuilderForPort(PORT, cred).addService(stub).build();
-            String serverURI = String.format(SERVER_URI_FMT, hostname, PORT);
+        System.setProperty("javax.net.ssl.trustStore", args[2]);
+        System.setProperty("javax.net.ssl.trustStorePassword", args[3]);
 
-            Discovery.getInstance().start(Messages.SERVICE_NAME + "@" + DOMAIN, serverURI);
+        String hostname = InetAddress.getLocalHost().getHostName();
+        DOMAIN = hostname.substring(hostname.indexOf(".") + 1);
 
-            LOG.info(String.format("Users gRPC Server ready @ %s\n", serverURI));
-            server.start().awaitTermination();
+        SslContext sslContext = GrpcUsersServer.buildSslContext(keystorePath, keystorePassword);
 
-        } catch (Exception e) {
-            LOG.severe(e.getMessage());
-        }
+        GrpcMessagesController stub = new GrpcMessagesController(DOMAIN);
+
+        Server server = NettyServerBuilder.forPort(PORT)
+                .addService(stub)
+                .sslContext(sslContext)
+                .build();
+
+        String serverURI = String.format(SERVER_URI_FMT, hostname, PORT);
+        Discovery.getInstance().start(Messages.SERVICE_NAME + "@" + DOMAIN, serverURI);
+
+        LOG.info(String.format("Messages gRPC Server ready @ %s\n", serverURI));
+        server.start().awaitTermination();
     }
 }

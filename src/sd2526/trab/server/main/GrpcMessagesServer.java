@@ -23,12 +23,9 @@ public class GrpcMessagesServer {
     private static final String SERVER_URI_FMT = "grpc://%s:%s/grpc";
 
     public static void main(String[] args) throws Exception {
-        // args[0] = keystore path, args[1] = keystore password
-        String keystorePath = args[0];
-        String keystorePassword = args[1];
-
-        System.setProperty("javax.net.ssl.trustStore", args[2]);
-        System.setProperty("javax.net.ssl.trustStorePassword", args[3]);
+        // Read from system properties set by the tester's flags
+        String keystorePath = System.getProperty("javax.net.ssl.keyStore");
+        String keystorePassword = System.getProperty("javax.net.ssl.keyStorePassword");
 
         String hostname = InetAddress.getLocalHost().getHostName();
         DOMAIN = hostname.substring(hostname.indexOf(".") + 1);

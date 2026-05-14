@@ -1,10 +1,10 @@
 MESSAGES_REST_SERVER_MAINCLASS=sd2526.trab.server.main.RestMessagesServer
 MESSAGES_REST_PORT=8081
-MESSAGES_REST_EXTRA_ARGS=
+MESSAGES_REST_EXTRA_ARGS=messages0.ourorg0.ks changeit truststore.ks changeit
 
 USERS_REST_SERVER_MAINCLASS=sd2526.trab.server.main.RestUsersServer
 USERS_REST_PORT=8080
-USERS_REST_EXTRA_ARGS=
+USERS_REST_EXTRA_ARGS=users.ourorg0.ks changeit truststore.ks changeit
 
 GATEWAY_REST_SERVER_MAINCLASS=sd2526.trab.server.main.GatewayServer
 GATEWAY_REST_PORT=8082
@@ -30,7 +30,7 @@ MESSAGES_REP_PORT=8086
 
 MESSAGES_REP_EXTRA_ARGS_FIRST=
 MESSAGES_REP_EXTRA_ARGS_OTHER=
-USERS_KEYSTORES=
-SERVERS_KEYSTORES=
+USERS_KEYSTORES=users.ourorg0,users.ourorg0.ks,changeit users.ourorg1,users.ourorg1.ks,changeit users.ourorg2,users.ourorg2.ks,changeit
+SERVERS_KEYSTORES=messages0.ourorg0,messages0.ourorg0.ks,changeit messages1.ourorg0,messages1.ourorg0.ks,changeit messages2.ourorg0,messages2.ourorg0.ks,changeit messages0.ourorg1,messages0.ourorg1.ks,changeit messages1.ourorg1,messages1.ourorg1.ks,changeit messages2.ourorg1,messages2.ourorg1.ks,changeit messages.ourorg2,messages.ourorg2.ks,changeit
 CLIENT_TRUSTSTORE=truststore.ks
 CLIENT_TRUSTSTORE_PWD=changeit

@@ -5,9 +5,12 @@ import sd2526.trab.discovery.Discovery;
 import sd2526.trab.server.rest.GatewayMessagesResources;
 import sd2526.trab.server.rest.GatewayUsersResources;
 import org.glassfish.jersey.server.ResourceConfig;
+
+import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.URI;
+import java.security.NoSuchAlgorithmException;
 import java.util.logging.Logger;
 
 
@@ -23,11 +26,11 @@ public class GatewayServer {
 
     private static Logger LOG = Logger.getLogger(GatewayServer.class.getName());
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, NoSuchAlgorithmException {
 
         String hostName = InetAddress.getLocalHost().getHostName();
         String domain = hostName.substring(hostName.indexOf(".") + 1);
-        String serverURI = String.format("http://%s:%d/rest", hostName, PORT);
+        String serverURI = String.format("https://%s:%d/rest", hostName, PORT);
 
         // to be able to handle both Users and Messages requests, we need to register them with the respective domain
         ResourceConfig config = new ResourceConfig();
@@ -37,7 +40,7 @@ public class GatewayServer {
         config.register(GatewayMessagesResources.class);
 
         // starts listening for HTTP requests with the configuration
-        JdkHttpServerFactory.createHttpServer(URI.create(serverURI), config);
+        JdkHttpServerFactory.createHttpServer(URI.create(serverURI), config, SSLContext.getDefault());
 
         LOG.info("Gateway REST Server ready @ " + serverURI);
 

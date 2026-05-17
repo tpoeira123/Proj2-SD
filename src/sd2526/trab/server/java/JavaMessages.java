@@ -28,6 +28,12 @@ public class JavaMessages implements Messages {
 
     private static final Map<String, ExecutorService> domainExecutors = new ConcurrentHashMap<>();
 
+    // Try to solve the race conditions of the removeInbox
+    private final Set<String> pendingRemoves = Collections.synchronizedSet(new HashSet<>());
+
+    // And deleteMessages (post doesn't need this because its idempotency)
+    private final Set<String> pendingDeletes = Collections.synchronizedSet(new HashSet<>());
+
     public JavaMessages(String serverDomain) {
         this.hibernate = Hibernate.getInstance();
         this.serverDomain = serverDomain;
@@ -238,8 +244,13 @@ public class JavaMessages implements Messages {
                 continue;
             }
 
-            InboxEntry entry = new InboxEntry(msg.getId(), senderName, destinationName);
-            hibernate.persist(entry);
+            String key = msg.getId() + "." + destinationName;
+            if (pendingRemoves.remove(key)) {
+                LOG.info("Skipping InboxEntry for " + destinationName + " - already removed (tombstone)");
+            } else {
+                InboxEntry entry = new InboxEntry(msg.getId(), senderName, destinationName);
+                hibernate.persist(entry);
+            }
         }
     }
 
@@ -320,6 +331,12 @@ public class JavaMessages implements Messages {
             for_each_destination(senderName, senderDomain, pwd, msg);
 
             hibernate.persist(msg);
+
+            if (pendingDeletes.contains(msg.getId())) {
+                LOG.info("Message already been deleted. (tombstone)");
+                pendingDeletes.remove(msg.getId());
+                return Result.ok();
+            }
 
             return Result.ok(msg.getId());
         } catch (Exception e) {
@@ -525,6 +542,7 @@ public class JavaMessages implements Messages {
         try {
             Message msg = hibernate.get(Message.class, mid);
             if (msg == null) {
+                pendingDeletes.add(mid);
                 LOG.info("Message doesn't exist.");
                 return Result.ok();
             }
@@ -582,7 +600,6 @@ public class JavaMessages implements Messages {
                                 boolean deleted = false;
                                 while (!deleted) {
                                     try {
-                                        String uri = Discovery.getInstance().knownUrisOf(Messages.SERVICE_NAME + "@" + domain);
                                         Result<Void> result = Clients.MessagesClient.get(domain).deleteMessage(name, mid, pwd);
 
                                         if (result.isOK() || result.error() == ErrorCode.NOT_FOUND) {

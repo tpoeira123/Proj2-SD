@@ -28,10 +28,13 @@ public class JavaMessages implements Messages {
 
     private static final Map<String, ExecutorService> domainExecutors = new ConcurrentHashMap<>();
 
-    // Try to solve the race conditions of the removeInbox
+    // These store keys for operations that arrived BEFORE the message itself was forwarded here.
+    // Tombstone for removeInboxMessage: stores "messageId.username"
+    // so that when the forwarded postMessage eventually arrives, it skips creating the InboxEntry
     private final Set<String> pendingRemoves = Collections.synchronizedSet(new HashSet<>());
 
-    // And deleteMessages (post doesn't need this because its idempotency)
+    // Tombstone for deleteMessage: stores messageIds
+    // so that when the forwarded postMessage eventually arrives, it skips persisting the message entirely
     private final Set<String> pendingDeletes = Collections.synchronizedSet(new HashSet<>());
 
     public JavaMessages(String serverDomain) {
@@ -244,10 +247,15 @@ public class JavaMessages implements Messages {
                 continue;
             }
 
+            // check if a removeInboxMessage tombstone exists for this message+user combination.
+            // This handles the race condition where removeInboxMessage arrived before postMessage.
             String key = msg.getId() + "." + destinationName;
             if (pendingRemoves.remove(key)) {
+                // Tombstone found: the client already asked to remove this message from this inbox.
+                // skip creating the InboxEntry — the message was effectively never delivered.
                 LOG.info("Skipping InboxEntry for " + destinationName + " - already removed (tombstone)");
             } else {
+                // Normal case: no tombstone, create the InboxEntry as usual
                 InboxEntry entry = new InboxEntry(msg.getId(), senderName, destinationName);
                 hibernate.persist(entry);
             }
@@ -332,9 +340,12 @@ public class JavaMessages implements Messages {
 
             hibernate.persist(msg);
 
-            if (pendingDeletes.contains(msg.getId())) {
+            // Before processing this message, check if a deleteMessage tombstone exists for it.
+            // This handles the race condition where deleteMessage arrived before the forwarded postMessage.
+            if (pendingDeletes.remove(msg.getId())) {
+                // Tombstone found: the client already asked to delete this message.
+                // Skip persisting it and creating any InboxEntries — act as if it was never posted.
                 LOG.info("Message already been deleted. (tombstone)");
-                pendingDeletes.remove(msg.getId());
                 return Result.ok();
             }
 
@@ -505,9 +516,19 @@ public class JavaMessages implements Messages {
             String query = "SELECT i FROM InboxEntry i WHERE i.destination = '" + username + "' AND i.messageId = '" + mid + "'";
             List<InboxEntry> entries = hibernate.jpql(query, InboxEntry.class);
             if (entries.isEmpty()) {
-                return Result.error(ErrorCode.NOT_FOUND);
-            }
+                // Inbox entry missing: message either already removed or user wasn't a recipient.
+                // Return NOT_FOUND (legitimate error).
+                Message m = hibernate.get(Message.class, mid);
+                if (m != null) {
+                    return Result.error(ErrorCode.NOT_FOUND);
+                }
 
+                // Message hasn't arrived yet (cross-domain race condition).
+                // Store a tombstone to skip InboxEntry creation upon arrival, and return OK.
+                pendingRemoves.add(mid + "." + username);
+                return Result.ok();
+            }
+            // Normal case: inbox entry exists, delete it
             hibernate.delete(entries.get(0));
 
             return Result.ok();
@@ -542,6 +563,8 @@ public class JavaMessages implements Messages {
         try {
             Message msg = hibernate.get(Message.class, mid);
             if (msg == null) {
+                // Message not found, either it was already deleted, or this is a race condition.
+                // If a race condition, store a tombstone to block future persistence of this message.
                 pendingDeletes.add(mid);
                 LOG.info("Message doesn't exist.");
                 return Result.ok();
